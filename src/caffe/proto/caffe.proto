@@ -307,7 +307,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 148 (last added: noise_param)
+// LayerParameter next available layer-specific ID: 149 (last added: seg_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -400,6 +400,7 @@ message LayerParameter {
   optional EltwiseAffineParameter eltwise_affine_param = 145;
   optional SubRegionParameter sub_region_param = 146;
   optional NoiseParameter noise_param = 147;
+  optional SegmentationParameter seg_param = 148;
 }
 
 // Message that stores parameters used to apply transformation
@@ -1163,6 +1164,7 @@ message V1LayerParameter {
   optional EltwiseAffineParameter eltwise_affine_param = 49;
   optional SubRegionParameter sub_region_param = 50;
   optional NoiseParameter noise_param = 51;
+  optional SegmentationParameter seg_param = 52;
 }
 
 // DEPRECATED: V0LayerParameter is the old way of specifying layer parameters
@@ -1335,4 +1337,10 @@ message NoiseParameter {
   optional float gaussian_std = 1 [default = 0];
   optional float uniform_range = 2 [default = 0];
   optional float bias = 3 [default = 0];
+}
+
+message SegmentationParameter {
+  optional uint32 data_height = 1;
+  optional uint32 data_width = 2;
+  optional uint32 seg_parameter = 3 [default = 1];
 }
