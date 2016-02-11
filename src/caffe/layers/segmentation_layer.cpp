@@ -452,7 +452,7 @@ void normalize(std::vector<float> &mask)
 }
 
 /* convolve src with mask.  dst is flipped! */
-void convolve_even(cv::Mat& src, cv::Mat &dst, std::vector<float> &mask)
+void convolve_even(const cv::Mat& src, cv::Mat &dst, std::vector<float> &mask)
 {
 	int width = src.cols;
 	int height = src.rows;
@@ -484,7 +484,7 @@ void iExtractRGBColorSpace(const cv::Mat& in, cv::Mat &B, cv::Mat &G, cv::Mat &R
 	}
 }
 
-void iSmooth(cv::Mat &src, float sigma, cv::Mat &out) {
+void iSmooth(const cv::Mat &src, float sigma, cv::Mat &out) {
 	std::vector<float> mask = make_fgauss(sigma);
 	normalize(mask);
 	cv::Mat tmp(src.rows, src.cols, src.type());
@@ -492,28 +492,28 @@ void iSmooth(cv::Mat &src, float sigma, cv::Mat &out) {
 	convolve_even(tmp, out, mask);
 }
 
-void iBuildGraph(const cv::Mat &in,
+void iBuildGraph(const std::vector<cv::Mat> &in,
 	float sigma,
 	Edge *&edges,
 	int *num_edges)
 {
-	int width = in.cols;
-	int height = in.rows;
+	int width = in[0].cols;
+	int height = in[0].rows;
 	int num = 0;
 	int x, y, xp, ym, yp;
 	int safeWidth = width - 1, safeHeight = height - 1;
-	int reserve_size = in.rows * in.cols * 8;
+	int reserve_size = in[0].rows * in[0].cols * 8;
 	//printf("Reserve size = %d\n",reserve_size);
 	edges = (Edge*)malloc(reserve_size*sizeof(Edge));
 	if (edges == NULL) {
 		printf("Error, could not malloc\n");
 		return;
 	}
-	cv::Mat R, G, B, smooth_r, smooth_g, smooth_b;
-	iExtractRGBColorSpace(in, B, G, R);
-	iSmooth(B, sigma, smooth_b);
-	iSmooth(G, sigma, smooth_g);
-	iSmooth(R, sigma, smooth_r);
+	cv::Mat smooth_r, smooth_g, smooth_b;
+	//iExtractRGBColorSpace(in, B, G, R);
+	iSmooth(in[0], sigma, smooth_b);
+	iSmooth(in[1], sigma, smooth_g);
+	iSmooth(in[2], sigma, smooth_r);
 
 	//Normalize
 
@@ -568,9 +568,6 @@ void iBuildGraph(const cv::Mat &in,
 			pR++; pG++; pB++;
 		}
 	}
-	R.release();
-	G.release();
-	B.release();
 	smooth_b.release();
 	smooth_g.release();
 	smooth_r.release();
@@ -643,15 +640,16 @@ void random_rgb(cv::Vec3b &c)
 }
 
 int FHGraphSegment(
-	cv::Mat &in,
-	float sigma,
-	float c,
-	int min_size,
+	std::vector<cv::Mat> &in,
+	const float sigma,
+	const float c,
+	const int min_size,
 	cv::Mat &out,
-	cv::Mat &out_color)
+	cv::Mat &out_color,
+	const int segStartNumber = 0)
 {
 
-	int i, size = in.rows * in.cols;
+	int i, size = in[0].rows * in[0].cols;
 	Universe u(size);
 	Edge* edges = NULL;
 	int num_edges;
@@ -666,40 +664,56 @@ int FHGraphSegment(
 
 	free(edges);
 
-	cv::Vec3b *m_colors = (cv::Vec3b *)malloc(size*sizeof(cv::Vec3b));
+	int numSegs = u.num_sets();
+	cv::Vec3b *m_colors = (cv::Vec3b *)malloc(numSegs*sizeof(cv::Vec3b));
 	cv::Vec3b *pColor = m_colors;
-	for (i = 0; i < size; i++)
+	for (i = 0; i < numSegs; i++)
 	{
 		cv::Vec3b color;
 		random_rgb(color);
 		*pColor++ = color;
 	}
 
-	out = cv::Mat(in.rows, in.cols, CV_32SC1);
-	out_color = cv::Mat(in.rows, in.cols, CV_8UC3);
+	out = cv::Mat(in[0].rows, in[0].cols, CV_32SC1);
+	out_color = cv::Mat(in[0].rows, in[0].cols, CV_8UC3);
 	cv::Mat_<int>::iterator pO = out.begin<int>();
 	cv::Mat_<cv::Vec3b>::iterator pPseudo = out_color.begin<cv::Vec3b>();
 	i = 0;
+	//We know there are u.num_sets() segments and size possible ids, and we want those ordered starting from 0.
+	int *m_ids = (int*)malloc(size*sizeof(int));
+	std::fill_n(m_ids, size, -1);
+	int currSeg = segStartNumber;
+	//std::map<int, int> segmentIdMap;
 	while (pO != out.end<int>()) {
-		*pO = u.find(i);
-		*pPseudo = m_colors[*pO];
+		int uId = u.find(i);
+		/*if (segmentIdMap.find(uId) == segmentIdMap.end()) {
+			segmentIdMap[uId] = currSeg;
+			++currSeg;
+		}
+		*pO = segmentIdMap[uId];*/
+		if (m_ids[uId] == -1) {
+			m_ids[uId] = currSeg;
+			++currSeg;
+		}
+		*pO = m_ids[uId];
+		*pPseudo = m_colors[*pO - segStartNumber];
 		++pO; ++i; ++pPseudo;
 	}
-
 	free(m_colors);
 	u.elts.clear();
-	return u.num_sets();
+	return numSegs;
 }
 
 /* END FH */
 /* -----------------------------------------------------------------------------------------*/
 
-void segmentation(cv::Mat &in, cv::Mat &out, const int s, const int m, const int iter) {
+int segmentation(std::vector<cv::Mat> &in, cv::Mat &out, const int s, const int m, const int iter, const int segStartNumber = 0) {
 	/*SLIC slic(in.cols, in.rows);
 	slic.ComputeSuperPixels(in, cv::Point(0, 0), s, m, iter);
 	slic.DrawResults(out);*/
 	cv::Mat tmp;
-	int numSegs = FHGraphSegment(in, 0.5f, 400, 1000, tmp, out);
+	int numSegs = FHGraphSegment(in, 0.5f, 200, 200, out, tmp, segStartNumber);
+	return numSegs;
 }
 
 namespace caffe {
@@ -781,14 +795,16 @@ void SegmentationLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 	int num = shape[0] * shape[1] * shape[2] * shape[3];
 	std::vector<cv::Mat> channels = { cv::Mat(), cv::Mat(), cv::Mat() };
 	cv::Mat img;
+	int segId = 0;
 	for (int i = 0; i < shape[0]; i++) {
-		channels[0] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 1, 0, 0)));
+		channels[0] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 0, 0, 0)));
 		channels[1] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 1, 0, 0)));
 		channels[2] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 2, 0, 0)));
 		cv::merge(channels, img);
-		img.convertTo(img, CV_8UC3);
+		//img.convertTo(img, CV_8UC3);
 		cv::Mat seg;
-		segmentation(img, seg, 10, 20, 3);
+		int numSegs = segmentation(channels, seg, 10, 20, 3, segId);
+		segId += numSegs;
 	}
 	//cv::Mat tmp = DecodeDatumToCVMat(*(const caffe::Datum*)((bottom[0]->cpu_data())), true);
 	caffe_copy(num, bottom[0]->cpu_data(), top[0]->mutable_cpu_data());
