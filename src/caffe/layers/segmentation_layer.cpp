@@ -248,7 +248,7 @@ void SLIC::DrawResults(cv::Mat &display){
 		//int index = (int)m_centers[i].y * m_width + (int)m_centers[i].x;
 
 		int y = pC->y, x = pC->x, safeHeight = m_height - 1;
-		if (x > 1 && y > 1 && x <  safeWidth && y < safeHeight){
+		if (x > 1 && y > 1 && x < safeWidth && y < safeHeight){
 			display.at<cv::Vec3b>(y, x) = red;
 
 			display.at<cv::Vec3b>(y, x + 1) = red;
@@ -689,8 +689,8 @@ int FHGraphSegment(
 		/*if (segmentIdMap.find(uId) == segmentIdMap.end()) {
 			segmentIdMap[uId] = currSeg;
 			++currSeg;
-		}
-		*pO = segmentIdMap[uId];*/
+			}
+			*pO = segmentIdMap[uId];*/
 		if (m_ids[uId] == -1) {
 			m_ids[uId] = currSeg;
 			++currSeg;
@@ -718,103 +718,171 @@ int segmentation(std::vector<cv::Mat> &in, cv::Mat &out, const int s, const int 
 
 namespace caffe {
 
-template <typename Dtype>
-void SegmentationLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-                                  const vector<Blob<Dtype>*>& top) {
-  SegmentationParameter seg_param = this->layer_param_.seg_param();
-  height_ = seg_param.data_height();
-  width_ = seg_param.data_width();
-  //data_height_ = seg_param.data_height();
-  //data_width_ = seg_param.data_width();
-  seg_parameter_ = seg_param.seg_parameter();
-}
+	template <typename Dtype>
+	void ExtractSegBoxes(const std::vector<cv::Mat> &in, const cv::Mat &seg, const int numSegs, const int segStartNumber, const int imgNum, const int bb_extension, const int segWidth, const int segHeight, const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+		//We need to extract a bounding box of each segment
+		Dtype* seg_data = top[0]->mutable_cpu_data();
+		const Dtype* bottom_data = bottom[0]->cpu_data();
+		//lets extract the bounding box first.
+		std::vector<cv::Rect> boxes;
+		boxes.resize(numSegs);
+		std::vector<cv::Rect>::iterator pB = boxes.begin();
+		while (pB != boxes.end()) {
+			pB->x = seg.rows;
+			pB->y = seg.cols;
+			pB->width = 0;
+			pB->height = 0;
+			++pB;
+		}
+		cv::Mat_<int>::const_iterator pS = seg.begin<int>();
+		//For now, width and height will just be the greater x,y positions
+		for (int j = 0; j < seg.rows; j++) {
+			for (int i = 0; i < seg.cols; i++) {
+				int correctedId = (*pS) - segStartNumber;
+				if (i < boxes[correctedId].x)
+					boxes[correctedId].x = i;
+				if (j < boxes[correctedId].y)
+					boxes[correctedId].y = j;
+				if (i > boxes[correctedId].width)
+					boxes[correctedId].width = i;
+				if (j > boxes[correctedId].height)
+					boxes[correctedId].height = j;
+				++pS;
+			}
+		}
+		int safeWidth = seg.cols - 1, safeHeight = seg.rows - 1;
+		pB = boxes.begin();
+		std::vector<int> newShape = { numSegs + segStartNumber, 3, segHeight, segWidth };
+		top[0]->Reshape(newShape);
+		int currSeg = segStartNumber, size = segWidth * segHeight;
+		for (int i = 0; i < numSegs; i++, pB++, currSeg++) {
+			//first lets scale our box appropriately and extend it
+			pB->width = pB->width - pB->x + 2 * bb_extension;
+			pB->height = pB->height - pB->y + 2 * bb_extension;
+			pB->x -= bb_extension;
+			pB->y -= bb_extension;
+			pB->x = std::min(std::max(pB->x, 0), safeWidth - 1);
+			pB->y = std::min(std::max(pB->y, 0), safeHeight - 1);
+			pB->width = std::min(std::max(pB->width, 1), safeWidth - pB->x);
+			pB->height = std::min(std::max(pB->height, 1), safeHeight - pB->y);
 
-template <typename Dtype>
-void SegmentationLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top) {
-  CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
-      << "corresponding to (num, channels, height, width)";
+			//Then we will extract it and add it to the top blob
+			cv::Mat sub1 = in[0](*pB);
+			cv::Mat sub2 = in[1](*pB);
+			cv::Mat sub3 = in[2](*pB);
+			cv::resize(sub1, sub1, cv::Size(segWidth, segHeight));
+			cv::resize(sub2, sub2, cv::Size(segWidth, segHeight));
+			cv::resize(sub3, sub3, cv::Size(segWidth, segHeight));
+			caffe_copy(size, (Dtype *)sub1.data, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
+			caffe_copy(size, (Dtype *)sub2.data, (Dtype *)seg_data + top[0]->offset(currSeg, 1, 0, 0));
+			caffe_copy(size, (Dtype *)sub3.data, (Dtype *)seg_data + top[0]->offset(currSeg, 2, 0, 0));
+			/*caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 0, 0, 0)]);
+			caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 1, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 1, 0, 0)]);
+			caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 2, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 2, 0, 0)]);*/
+			//seg_data[top[0]->offset(currSeg, 0, 0, 0)] = sub1.data;
+			//seg_data[top[0]->offset(currSeg, 0, segWidth, segHeight)]->CopyFrom(bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)];
 
-  vector<int> top_shape = bottom[0]->shape();
-  top[0]->Reshape(top_shape);
-}
-
-template <typename Dtype>
-void SegmentationLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top) {
-  /*const Dtype* bottom_data = bottom[0]->cpu_data();
-  const Dtype* point_data = bottom[1]->cpu_data();
-  const Dtype* ground_truth_point_data = bottom[2]->cpu_data();
-  Dtype* top_data = top[0]->mutable_cpu_data();
-  
-  const int num_point = bottom[1]->shape(1) / 2;
-  const int num = bottom[0]->num();
-  const int channels = bottom[0]->channels();
-  for (int n = 0; n < num; n++) {
-    for (int i = 0; i < num_point; i++) {
-      Dtype center_x = (point_data[n * bottom[1]->shape(1) + i * 2] / data_width_ + 0.5)  * bottom[0]->width();
-      Dtype center_y = (point_data[n * bottom[1]->shape(1) + i * 2 + 1] / data_height_ + 0.5) * bottom[0]->height();
-      int x0 = floor(center_x - width_ / 2);
-      int y0 = floor(center_y - height_ / 2);
-      if (top.size() == 3) {
-        top[2]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2] = (Dtype)(x0 + (Dtype)width_ / 2 + 0.5) / (Dtype)bottom[0]->width() * data_width_;
-        top[2]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2 + 1] = (Dtype)(y0 + (Dtype)height_ / 2 + 0.5) / (Dtype)bottom[0]->height() * data_height_;
-        top[1]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2] = 
-          (ground_truth_point_data[n * bottom[1]->shape(1) + i * 2] + data_width_ / 2) - top[2]->cpu_data()[n * bottom[1]->shape(1) + i * 2];
-        top[1]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2 + 1] = 
-          (ground_truth_point_data[n * bottom[1]->shape(1) + i * 2 + 1] + data_height_ / 2) - top[2]->cpu_data()[n * bottom[1]->shape(1) + i * 2 + 1];
-
-      }
-
-      for (int c = 0; c < channels; c++) {
-        for (int h = 0; h < height_; h++) {
-          for (int w = 0; w < width_; w++) {
-            if (y0 + h >= 0 && y0 + h <= bottom[0]->height() - 1
-                && x0 + w >= 0 && x0 + w <= bottom[0]->width() - 1) {
-              if (as_dim_ == 0) {
-                top_data[top[0]->offset(num * i + n, c, h, w)] = bottom_data[bottom[0]->offset(n, c, y0 + h, x0 + w)];
-              }
-              else {
-                top_data[top[0]->offset(n, channels * i + c, h, w)] = bottom_data[bottom[0]->offset(n, c, y0 + h, x0 + w)];
-              }
-            }
-            else {
-              if (as_dim_ == 0) {
-                top_data[top[0]->offset(num * i + n, c, h, w)] = 0;
-              }
-              else {
-                top_data[top[0]->offset(n, channels * i + c, h, w)] = 0;
-              }
-            }
-          }
-        }
-      }
-    }
-  }*/
-	vector<int> shape = bottom[0]->shape();
-	int num = shape[0] * shape[1] * shape[2] * shape[3];
-	std::vector<cv::Mat> channels = { cv::Mat(), cv::Mat(), cv::Mat() };
-	cv::Mat img;
-	int segId = 0;
-	for (int i = 0; i < shape[0]; i++) {
-		channels[0] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 0, 0, 0)));
-		channels[1] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 1, 0, 0)));
-		channels[2] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 2, 0, 0)));
-		cv::merge(channels, img);
-		//img.convertTo(img, CV_8UC3);
-		cv::Mat seg;
-		int numSegs = segmentation(channels, seg, 10, 20, 3, segId);
-		segId += numSegs;
+		}
 	}
-	//cv::Mat tmp = DecodeDatumToCVMat(*(const caffe::Datum*)((bottom[0]->cpu_data())), true);
-	caffe_copy(num, bottom[0]->cpu_data(), top[0]->mutable_cpu_data());
-}
+
+	template <typename Dtype>
+	void SegmentationLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+		const vector<Blob<Dtype>*>& top) {
+		SegmentationParameter seg_param = this->layer_param_.seg_param();
+		height_ = seg_param.data_height();
+		width_ = seg_param.data_width();
+		//data_height_ = seg_param.data_height();
+		//data_width_ = seg_param.data_width();
+		seg_parameter_ = seg_param.seg_parameter();
+	}
+
+	template <typename Dtype>
+	void SegmentationLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
+		const vector<Blob<Dtype>*>& top) {
+		CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
+			<< "corresponding to (num, channels, height, width)";
+
+		vector<int> top_shape = bottom[0]->shape();
+		top[0]->Reshape(top_shape);
+	}
+
+	template <typename Dtype>
+	void SegmentationLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+		const vector<Blob<Dtype>*>& top) {
+		/*const Dtype* bottom_data = bottom[0]->cpu_data();
+		const Dtype* point_data = bottom[1]->cpu_data();
+		const Dtype* ground_truth_point_data = bottom[2]->cpu_data();
+		Dtype* top_data = top[0]->mutable_cpu_data();
+
+		const int num_point = bottom[1]->shape(1) / 2;
+		const int num = bottom[0]->num();
+		const int channels = bottom[0]->channels();
+		for (int n = 0; n < num; n++) {
+		for (int i = 0; i < num_point; i++) {
+		Dtype center_x = (point_data[n * bottom[1]->shape(1) + i * 2] / data_width_ + 0.5)  * bottom[0]->width();
+		Dtype center_y = (point_data[n * bottom[1]->shape(1) + i * 2 + 1] / data_height_ + 0.5) * bottom[0]->height();
+		int x0 = floor(center_x - width_ / 2);
+		int y0 = floor(center_y - height_ / 2);
+		if (top.size() == 3) {
+		top[2]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2] = (Dtype)(x0 + (Dtype)width_ / 2 + 0.5) / (Dtype)bottom[0]->width() * data_width_;
+		top[2]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2 + 1] = (Dtype)(y0 + (Dtype)height_ / 2 + 0.5) / (Dtype)bottom[0]->height() * data_height_;
+		top[1]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2] =
+		(ground_truth_point_data[n * bottom[1]->shape(1) + i * 2] + data_width_ / 2) - top[2]->cpu_data()[n * bottom[1]->shape(1) + i * 2];
+		top[1]->mutable_cpu_data()[n * bottom[1]->shape(1) + i * 2 + 1] =
+		(ground_truth_point_data[n * bottom[1]->shape(1) + i * 2 + 1] + data_height_ / 2) - top[2]->cpu_data()[n * bottom[1]->shape(1) + i * 2 + 1];
+
+		}
+
+		for (int c = 0; c < channels; c++) {
+		for (int h = 0; h < height_; h++) {
+		for (int w = 0; w < width_; w++) {
+		if (y0 + h >= 0 && y0 + h <= bottom[0]->height() - 1
+		&& x0 + w >= 0 && x0 + w <= bottom[0]->width() - 1) {
+		if (as_dim_ == 0) {
+		top_data[top[0]->offset(num * i + n, c, h, w)] = bottom_data[bottom[0]->offset(n, c, y0 + h, x0 + w)];
+		}
+		else {
+		top_data[top[0]->offset(n, channels * i + c, h, w)] = bottom_data[bottom[0]->offset(n, c, y0 + h, x0 + w)];
+		}
+		}
+		else {
+		if (as_dim_ == 0) {
+		top_data[top[0]->offset(num * i + n, c, h, w)] = 0;
+		}
+		else {
+		top_data[top[0]->offset(n, channels * i + c, h, w)] = 0;
+		}
+		}
+		}
+		}
+		}
+		}
+		}*/
+		vector<int> shape = bottom[0]->shape();
+		int num = shape[0] * shape[1] * shape[2] * shape[3];
+		std::vector<cv::Mat> channels = { cv::Mat(), cv::Mat(), cv::Mat() };
+		cv::Mat img;
+		int segId = 0;
+		for (int i = 0; i < shape[0]; i++) {
+			channels[0] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 0, 0, 0)));
+			channels[1] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 1, 0, 0)));
+			channels[2] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 2, 0, 0)));
+			cv::merge(channels, img);
+			//img.convertTo(img, CV_8UC3);
+			cv::Mat seg;
+			int numSegs = segmentation(channels, seg, 10, 20, 3, segId);
+			ExtractSegBoxes<Dtype>(channels, seg, numSegs, segId, i, 3, 227, 227, bottom, top);
+			segId += numSegs;
+		}
+		//cv::Mat tmp = DecodeDatumToCVMat(*(const caffe::Datum*)((bottom[0]->cpu_data())), true);
+		//caffe_copy(num, bottom[0]->cpu_data(), top[0]->mutable_cpu_data());
+	}
 
 #ifdef CPU_ONLY
-STUB_GPU(SegmentationLayer);
+	STUB_GPU(SegmentationLayer);
 #endif
 
-INSTANTIATE_CLASS(SegmentationLayer);
-REGISTER_LAYER_CLASS(Segmentation);
+	INSTANTIATE_CLASS(SegmentationLayer);
+	REGISTER_LAYER_CLASS(Segmentation);
 
 }  // namespace caffe

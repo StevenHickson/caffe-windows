@@ -14,4 +14,4 @@ weight_decay: 0.0005
 snapshot: 10000
 snapshot_prefix: "D:/Documents/GitHub/caffe-windows/models/segments/"
 # uncomment the following to default to CPU mode solving
-# solver_mode: CPU
+solver_mode: CPU
