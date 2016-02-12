@@ -719,6 +719,28 @@ int segmentation(std::vector<cv::Mat> &in, cv::Mat &out, const int s, const int 
 namespace caffe {
 
 	template <typename Dtype>
+	void CopyMatToDType(const cv::Mat& cv_img, Dtype* transformed_data) {
+		// Check dimensions.
+		const int channels = 1;
+		const int height = cv_img.rows;
+		const int width = cv_img.cols;
+
+		int top_index;
+		for (int h = 0; h < height; ++h) {
+			const uchar* ptr = cv_img.ptr<uchar>(h);
+			int img_index = 0;
+			for (int w = 0; w < width; ++w) {
+				for (int c = 0; c < channels; ++c) {
+					top_index = (c * height + h) * width + w;
+					// int top_index = (c * height + h) * width + w;
+					Dtype pixel = static_cast<Dtype>(ptr[img_index++]);
+					transformed_data[top_index] = pixel;
+				}
+			}
+		}
+	}
+
+	template <typename Dtype>
 	void ExtractSegBoxes(const std::vector<cv::Mat> &in, const cv::Mat &seg, const int numSegs, const int segStartNumber, const int imgNum, const int bb_extension, const int segWidth, const int segHeight, const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
 		//We need to extract a bounding box of each segment
 		Dtype* seg_data = top[0]->mutable_cpu_data();
@@ -753,7 +775,7 @@ namespace caffe {
 		int safeWidth = seg.cols - 1, safeHeight = seg.rows - 1;
 		pB = boxes.begin();
 		std::vector<int> newShape = { numSegs + segStartNumber, 3, segHeight, segWidth };
-		top[0]->Reshape(newShape);
+		//top[0]->Reshape(newShape);
 		int currSeg = segStartNumber, size = segWidth * segHeight;
 		for (int i = 0; i < numSegs; i++, pB++, currSeg++) {
 			//first lets scale our box appropriately and extend it
@@ -773,14 +795,20 @@ namespace caffe {
 			cv::resize(sub1, sub1, cv::Size(segWidth, segHeight));
 			cv::resize(sub2, sub2, cv::Size(segWidth, segHeight));
 			cv::resize(sub3, sub3, cv::Size(segWidth, segHeight));
+			//memcpy((Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0), (Dtype *)sub1.data, sizeof(Dtype)* size);
+			/*if (error != cudaSuccess)
+				printf("Cuda copy error: %s", cudaGetErrorString(error));*/
+			//memcpy((Dtype *)seg_data + top[0]->offset(currSeg, 1, 0, 0), (Dtype *)sub2.data, sizeof(Dtype)* size);
+			//memcpy((Dtype *)seg_data + top[0]->offset(currSeg, 2, 0, 0), (Dtype *)sub3.data, sizeof(Dtype)* size);
 			caffe_copy(size, (Dtype *)sub1.data, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
 			caffe_copy(size, (Dtype *)sub2.data, (Dtype *)seg_data + top[0]->offset(currSeg, 1, 0, 0));
 			caffe_copy(size, (Dtype *)sub3.data, (Dtype *)seg_data + top[0]->offset(currSeg, 2, 0, 0));
-			/*caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 0, 0, 0)]);
-			caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 1, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 1, 0, 0)]);
-			caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 2, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 2, 0, 0)]);*/
-			//seg_data[top[0]->offset(currSeg, 0, 0, 0)] = sub1.data;
-			//seg_data[top[0]->offset(currSeg, 0, segWidth, segHeight)]->CopyFrom(bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)];
+				/*caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 0, 0, 0)]);
+				caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 1, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 1, 0, 0)]);
+				caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 2, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 2, 0, 0)]);*/
+				//seg_data[top[0]->offset(currSeg, 0, 0, 0)] = sub1.data;
+				//seg_data[top[0]->offset(currSeg, 0, segWidth, segHeight)]->CopyFrom(bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)];
+			//CopyMatToDType(sub1, seg_data + top[0]->offset(currSeg, 1, 0, 0));
 
 		}
 	}
@@ -803,6 +831,8 @@ namespace caffe {
 			<< "corresponding to (num, channels, height, width)";
 
 		vector<int> top_shape = bottom[0]->shape();
+		//Guess the number of segs here here
+		//top_shape[0] = top_shape[0] * 60;
 		top[0]->Reshape(top_shape);
 	}
 

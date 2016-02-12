@@ -9,7 +9,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training.txt"
-    batch_size: 64
+    batch_size: 1
     new_height: 256
     new_width: 256
   }
@@ -30,7 +30,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing.txt"
-    batch_size: 64
+    batch_size: 1
     new_height: 256
     new_width: 256
   }
