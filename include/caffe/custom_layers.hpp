@@ -538,7 +538,7 @@ namespace caffe {
 		  const vector<Blob<Dtype>*>& top);
 
 	  virtual inline const char* type() const { return "Segmentation"; }
-	  virtual inline int ExactNumBottomBlobs() const { return 1; }
+	  virtual inline int ExactNumBottomBlobs() const { return 2; }
 	  virtual inline int MinTopBlobs() const { return 1; }
 
   protected:
@@ -557,6 +557,7 @@ namespace caffe {
 
 	  int height_;
 	  int width_;
+	  int num_segments_;
 	  //int data_height_;
 	  //int data_width_;
 	  int seg_parameter_;
