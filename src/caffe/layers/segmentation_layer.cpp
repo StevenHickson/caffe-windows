@@ -721,6 +721,8 @@ int MostOccuringValue(const cv::Mat &in, const cv::Rect &bbox) {
 	cv::Rect fixedBox = bbox;
 	fixedBox.width -= fixedBox.x;
 	fixedBox.height -= fixedBox.y;
+	fixedBox.width = std::min(std::max(fixedBox.width, 1), fixedBox.width - 1);
+	fixedBox.height = std::min(std::max(fixedBox.height, 1), fixedBox.height - 1);
 
 	cv::Mat region = in(fixedBox);
 	cv::Mat_<float>::const_iterator pR = region.begin<float>();
@@ -792,10 +794,11 @@ namespace caffe {
 		pB = boxes.begin();
 		//std::vector<int> newShape = { numSegs + segStartNumber, 3, segHeight, segWidth };
 		//top[0]->Reshape(newShape);
-		printf("Num Segs: %d\n", numSegs);
-		std::vector<int> top_shape = { numSegs, 4, 1, 1 };
+		//printf("Num Segs: %d\n", numSegs);
+		int totalSegs = numSegs + segStartNumber;
+		std::vector<int> top_shape = { totalSegs, 5, 1, 1 };
 		top[0]->Reshape(top_shape);
-		std::vector<int> top2_shape = { numSegs };
+		std::vector<int> top2_shape = { totalSegs };
 		top[1]->Reshape(top2_shape);
 		Dtype* seg_data = top[0]->mutable_cpu_data();
 		Dtype* label_data = top[1]->mutable_cpu_data();
@@ -813,11 +816,11 @@ namespace caffe {
 			pB->width = std::min(std::max(pB->width, 1), safeWidth);
 			pB->height = std::min(std::max(pB->height, 1), safeHeight);
 
-			float indices[4] = { pB->x, pB->y, pB->width, pB->height };
-			caffe_copy(4, (Dtype *)indices, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
+			float indices[5] = { (float)imgNum, pB->x, pB->y, pB->width, pB->height };
+			caffe_copy(5, (Dtype *)indices, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
 
 			//*pSL++ = (float)MostOccuringValue(label, *pB);
-			label_data[i] = (float)MostOccuringValue(label, *pB);
+			label_data[currSeg] = (float)MostOccuringValue(label, *pB);
 			//Then we will extract it and add it to the top blob
 			/*cv::Mat sub1 = in[0](*pB);
 			cv::Mat sub2 = in[1](*pB);
@@ -869,7 +872,7 @@ namespace caffe {
 		//vector<int> top_shape = bottom[0]->shape();
 		//Guess the number of segs here here
 		//top_shape[0] = top_shape[0] * 60;
-		std::vector<int> top_shape = { num_segments_, 4, 1, 1 };
+		std::vector<int> top_shape = { num_segments_, 5, 1, 1 };
 		top[0]->Reshape(top_shape);
 		std::vector<int> top2_shape = { num_segments_ };
 		top[1]->Reshape(top2_shape);
@@ -932,6 +935,7 @@ namespace caffe {
 		std::vector<cv::Mat> channels = { cv::Mat(), cv::Mat(), cv::Mat() };
 		cv::Mat img;
 		int segId = 0;
+		this->num_segments_ = 0;
 		for (int i = 0; i < shape[0]; i++) {
 			channels[0] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 0, 0, 0)));
 			channels[1] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 1, 0, 0)));
@@ -941,9 +945,10 @@ namespace caffe {
 			cv::Mat label = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[1]->cpu_data() + bottom[1]->offset(i, 0, 0, 0)));
 			//img.convertTo(img, CV_8UC3);
 			cv::Mat seg;
-			this->num_segments_ = segmentation(channels, seg, 10, 20, 3, segId);
-			ExtractSegBoxes<Dtype>(channels, seg, label, this->num_segments_, segId, i, 3, 227, 227, bottom, top);
-			segId += this->num_segments_;
+			int numSegs = segmentation(channels, seg, 10, 20, 3, segId);
+			this->num_segments_ += numSegs;
+			ExtractSegBoxes<Dtype>(channels, seg, label, numSegs, segId, i, 3, 227, 227, bottom, top);
+			segId += numSegs;
 		}
 		//cv::Mat tmp = DecodeDatumToCVMat(*(const caffe::Datum*)((bottom[0]->cpu_data())), true);
 		//caffe_copy(num, bottom[0]->cpu_data(), top[0]->mutable_cpu_data());

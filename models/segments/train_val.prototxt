@@ -9,7 +9,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training.txt"
-    batch_size: 1
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -34,7 +34,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing.txt"
-    batch_size: 1
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -58,7 +58,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training_labels.txt"
-    batch_size: 1
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -79,7 +79,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing_labels.txt"
-    batch_size: 1
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
