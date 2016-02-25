@@ -300,6 +300,9 @@
     <ClCompile Include="..\..\src\caffe\layers\segmentation_layer.cpp">
       <Filter>layers</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\caffe\layers\label_data_layer.cpp">
+      <Filter>layers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\caffe\util\device_alternate.hpp">
