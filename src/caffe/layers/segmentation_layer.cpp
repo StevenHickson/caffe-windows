@@ -732,7 +732,7 @@ int MostOccuringValue(const cv::Mat &in, const cv::Rect &bbox) {
 		counts[(int)*pR]++;
 		++pR;
 	}
-	return *std::max_element(counts.begin(), counts.end());
+	return std::distance(counts.begin(), std::max_element(counts.begin(), counts.end()));
 }
 
 namespace caffe {
@@ -820,7 +820,7 @@ namespace caffe {
 			caffe_copy(5, (Dtype *)indices, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
 
 			//*pSL++ = (float)MostOccuringValue(label, *pB);
-			label_data[currSeg] = (float)MostOccuringValue(label, *pB);
+			label_data[currSeg] = static_cast<float>(MostOccuringValue(label, *pB));
 			//Then we will extract it and add it to the top blob
 			/*cv::Mat sub1 = in[0](*pB);
 			cv::Mat sub2 = in[1](*pB);
