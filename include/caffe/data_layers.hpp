@@ -359,6 +359,33 @@ namespace caffe {
   * TODO(dox): thorough documentation for Forward and proto params.
   */
   template <typename Dtype>
+  class LabelDataLayer : public BasePrefetchingDataLayer<Dtype> {
+  public:
+	  explicit LabelDataLayer(const LayerParameter& param)
+		  : BasePrefetchingDataLayer<Dtype>(param) {}
+	  virtual ~LabelDataLayer();
+	  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+		  const vector<Blob<Dtype>*>& top);
+
+	  virtual inline const char* type() const { return "LabelData"; }
+	  virtual inline int ExactNumBottomBlobs() const { return 0; }
+	  virtual inline int ExactNumTopBlobs() const { return 2; }
+
+  protected:
+	  shared_ptr<Caffe::RNG> prefetch_rng_;
+	  virtual void ShuffleImages();
+	  virtual void load_batch(Batch<Dtype>* batch);
+
+	  vector<std::pair<std::string, int> > lines_;
+	  int lines_id_;
+  };
+
+  /**
+  * @brief Provides data to the Net from image files.
+  *
+  * TODO(dox): thorough documentation for Forward and proto params.
+  */
+  template <typename Dtype>
   class MultiLabelImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
   public:
     explicit MultiLabelImageDataLayer(const LayerParameter& param)

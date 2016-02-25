@@ -9,7 +9,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training.txt"
-    batch_size: 2
+    batch_size: 32
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -20,13 +20,13 @@ layer {
     mean_value: 104.00699
 	mean_value: 116.66877
 	mean_value: 122.67892
-	#mirror: true
+	mirror: false
   }
 
 }
 layer {
   name: "data"
-  type: "ImageData"
+  type: "LabelData"
   top: "data"
   top: "tmp1"
   include {
@@ -34,7 +34,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing.txt"
-    batch_size: 2
+    batch_size: 32
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -45,29 +45,28 @@ layer {
 	mean_value: 104.00699
 	mean_value: 116.66877
 	mean_value: 122.67892
-    #mirror: true
+    mirror: false
   }
 }
 layer {
   name: "label"
-  type: "ImageData"
+  type: "LabelData"
   top: "label"
   top: "tmp2"
   include {
     phase: TRAIN
   }
+  transform_param {
+    mirror: false
+  }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training_labels.txt"
-    batch_size: 2
+    batch_size: 32
     new_height: 227
     new_width: 227
 	shuffle: false
+	is_color: false
   }
-  transform_param {
-    #crop_size: 227
-	#mirror: true
-  }
-
 }
 layer {
   name: "label"
@@ -77,16 +76,16 @@ layer {
   include {
     phase: TEST
   }
+  transform_param {
+    mirror: false
+  }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing_labels.txt"
-    batch_size: 2
+    batch_size: 32
     new_height: 227
     new_width: 227
 	shuffle: false
-  }
-  transform_param {
-    #crop_size: 227
-    #mirror: true
+	is_color: false
   }
 }
 layer {
@@ -332,8 +331,8 @@ layer {
   bottom: "bboxes"
   top: "pool5"
   roi_pooling_param {
-    pooled_w: 7
-    pooled_h: 7
+    pooled_w: 3
+    pooled_h: 3
     spatial_scale: 0.0625 # 1/16
   }
 }
