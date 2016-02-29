@@ -813,7 +813,7 @@ namespace caffe {
 			cv::imshow("SLIC", tmp);
 			cv::waitKey(0);
 			slic.CreateMask(out);
-			//CHECK_EQ(method_, 1) << "Error, SLIC not fully implemented yet.";
+			CHECK_EQ(method_, 1) << "Error, SLIC not fully implemented yet.";
 		}
 		return numSegs;
 	}
