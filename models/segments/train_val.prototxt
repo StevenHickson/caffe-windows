@@ -9,7 +9,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training.txt"
-    batch_size: 32
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -34,7 +34,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing.txt"
-    batch_size: 32
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -61,7 +61,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/training_labels.txt"
-    batch_size: 32
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -81,7 +81,7 @@ layer {
   }
   image_data_param {
     source: "D:/Documents/Data/Segmentation/testing_labels.txt"
-    batch_size: 32
+    batch_size: 2
     new_height: 227
     new_width: 227
 	shuffle: false
@@ -94,12 +94,20 @@ layer {
   bottom: "tmp1"
 }
 layer {
+  name: "silence"
+  type: "Silence"
+  bottom: "tmp2"
+}
+layer {
   name: "seg"
   type: "Segmentation"
   bottom: "data"
   bottom: "label"
   top: "bboxes"
   top: "segLabels"
+  seg_param {
+    method: 1
+  }
 }
 layer {
   name: "conv1"
