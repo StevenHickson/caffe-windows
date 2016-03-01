@@ -5,6 +5,17 @@ input_dim: 3
 input_dim: 227
 input_dim: 227
 layer {
+  name: "seg"
+  type: "Segmentation"
+  bottom: "data"
+  top: "bboxes"
+  top: "segmentations"
+  seg_param {
+    method: 0
+    k: 200
+  }
+}
+layer {
   name: "conv1"
   type: "Convolution"
   bottom: "data"
@@ -137,18 +148,19 @@ layer {
   top: "conv5"
 }
 layer {
-  name: "pool5"
-  type: "Pooling"
+  name: "roi_pool5"
+  type: "ROIPooling"
   bottom: "conv5"
+  bottom: "bboxes"
   top: "pool5"
-  pooling_param {
-    pool: MAX
-    kernel_size: 3
-    stride: 2
+  roi_pooling_param {
+    pooled_w: 3
+    pooled_h: 3
+    spatial_scale: 0.0625
   }
 }
 layer {
-  name: "fc6"
+  name: "fc6_new"
   type: "InnerProduct"
   bottom: "pool5"
   top: "fc6"
@@ -172,7 +184,7 @@ layer {
   }
 }
 layer {
-  name: "fc7"
+  name: "fc7_new"
   type: "InnerProduct"
   bottom: "fc6"
   top: "fc7"
@@ -196,17 +208,17 @@ layer {
   }
 }
 layer {
-  name: "fc8_segments"
+  name: "fc8_segments_new"
   type: "InnerProduct"
   bottom: "fc7"
-  top: "fc8_segments"
+  top: "fc8_segments_new"
   inner_product_param {
-    num_output: 4
+    num_output: 5
   }
 }
 layer {
   name: "prob"
   type: "Softmax"
-  bottom: "fc8_segments"
+  bottom: "fc8_segments_new"
   top: "prob"
 }

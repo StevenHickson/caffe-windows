@@ -854,16 +854,29 @@ namespace caffe {
 		const vector<Blob<Dtype>*>& top) {
 		CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
 			<< "corresponding to (num, channels, height, width)";
-		CHECK_EQ(4, bottom[1]->num_axes()) << "Label must have 4 axes, "
-			<< "corresponding to (num, channels, height, width)";
 
 		//vector<int> top_shape = bottom[0]->shape();
 		//Guess the number of segs here here
 		//top_shape[0] = top_shape[0] * 60;
 		std::vector<int> top_shape = { num_segments_, 5, 1, 1 };
 		top[0]->Reshape(top_shape);
-		std::vector<int> top2_shape = { num_segments_ };
-		top[1]->Reshape(top2_shape);
+		if (top.size() == 2) {
+			if (bottom.size() == 2) {
+				CHECK_EQ(4, bottom[1]->num_axes()) << "Label must have 4 axes, "
+					<< "corresponding to (num, channels, height, width)";
+				std::vector<int> top2_shape = { num_segments_ };
+				top[1]->Reshape(top2_shape);
+			}
+			else {
+				top[1]->ReshapeLike(*(bottom[0]));
+			}
+		}
+		else if (top.size() == 3) {
+			std::vector<int> top2_shape = { num_segments_ };
+			top[1]->Reshape(top2_shape);
+			top[2]->ReshapeLike(*(bottom[0]));
+		}
+
 	}
 
 	template <typename Dtype>
