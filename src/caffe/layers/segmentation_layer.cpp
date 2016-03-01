@@ -707,7 +707,7 @@ namespace caffe {
 	}
 
 	template <typename Dtype>
-	void ExtractSegBoxes(const std::vector<cv::Mat> &in, const cv::Mat &seg, cv::Mat &label, int numSegs, const int segStartNumber, const int imgNum, const int bb_extension, const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+	void ExtractSegBoxes(const std::vector<cv::Mat> &in, const cv::Mat &seg, cv::Mat &label, int numSegs, const int segStartNumber, const int imgNum, const int bb_extension, const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top, bool labelsProvided) {
 		//We need to extract a bounding box of each segment
 		const Dtype* bottom_data = bottom[0]->cpu_data();
 		//lets extract the bounding box first.
@@ -745,10 +745,13 @@ namespace caffe {
 		int totalSegs = numSegs + segStartNumber;
 		std::vector<int> top_shape = { totalSegs, 5, 1, 1 };
 		top[0]->Reshape(top_shape);
-		std::vector<int> top2_shape = { totalSegs };
-		top[1]->Reshape(top2_shape);
 		Dtype* seg_data = top[0]->mutable_cpu_data();
-		Dtype* label_data = top[1]->mutable_cpu_data();
+		Dtype* label_data;
+		if (labelsProvided) {
+			std::vector<int> top2_shape = { totalSegs };
+			top[1]->Reshape(top2_shape);
+			label_data = top[1]->mutable_cpu_data();
+		}
 		//float *segLabels = (float*)malloc(numSegs * sizeof(float));
 		//float *pSL = segLabels;
 		int currSeg = segStartNumber;
@@ -767,7 +770,8 @@ namespace caffe {
 			caffe_copy(5, (Dtype *)indices, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
 
 			//*pSL++ = (float)MostOccuringValue(label, *pB);
-			label_data[currSeg] = static_cast<float>(MostOccuringValue(label, *pB));
+			if (labelsProvided)
+				label_data[currSeg] = static_cast<float>(MostOccuringValue(label, *pB));
 			//Then we will extract it and add it to the top blob
 			/*cv::Mat sub1 = in[0](*pB);
 			cv::Mat sub2 = in[1](*pB);
@@ -783,11 +787,11 @@ namespace caffe {
 			/*caffe_copy(size, (Dtype *)sub1.data, (Dtype *)seg_data + top[0]->offset(currSeg, 0, 0, 0));
 			caffe_copy(size, (Dtype *)sub2.data, (Dtype *)seg_data + top[0]->offset(currSeg, 1, 0, 0));
 			caffe_copy(size, (Dtype *)sub3.data, (Dtype *)seg_data + top[0]->offset(currSeg, 2, 0, 0));*/
-				/*caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 0, 0, 0)]);
-				caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 1, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 1, 0, 0)]);
-				caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 2, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 2, 0, 0)]);*/
-				//seg_data[top[0]->offset(currSeg, 0, 0, 0)] = sub1.data;
-				//seg_data[top[0]->offset(currSeg, 0, segWidth, segHeight)]->CopyFrom(bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)];
+			/*caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 0, 0, 0)]);
+			caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 1, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 1, 0, 0)]);
+			caffe_copy(size, bottom_data[bottom[0]->offset(imgNum, 2, pB->y, pB->x)], seg_data[top[0]->offset(currSeg, 2, 0, 0)]);*/
+			//seg_data[top[0]->offset(currSeg, 0, 0, 0)] = sub1.data;
+			//seg_data[top[0]->offset(currSeg, 0, segWidth, segHeight)]->CopyFrom(bottom_data[bottom[0]->offset(imgNum, 0, pB->y, pB->x)];
 			//CopyMatToDType(sub1, seg_data + top[0]->offset(currSeg, 1, 0, 0));
 
 		}
@@ -915,23 +919,43 @@ namespace caffe {
 		}
 		}*/
 		vector<int> shape = bottom[0]->shape();
-		int num = shape[0] * shape[1] * shape[2] * shape[3];
+		int num = shape[2] * shape[3];
 		std::vector<cv::Mat> channels = { cv::Mat(), cv::Mat(), cv::Mat() };
 		cv::Mat img;
 		int segId = 0;
 		this->num_segments_ = 0;
+
+		bool labelsProvided = false;
+		if (bottom.size() == 2)
+			labelsProvided = true;
+		bool genSegs = false;
+		Dtype* top_seg_data;
+		if ((top.size() == 2 && !labelsProvided) || top.size() == 3) {
+			genSegs = true;
+			top_seg_data = top.back()->mutable_cpu_data();
+			std::vector<int> top_shape = { shape[0], 1, shape[2], shape[3] };
+			top.back()->Reshape(top_shape);
+		}
 		for (int i = 0; i < shape[0]; i++) {
 			channels[0] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 0, 0, 0)));
 			channels[1] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 1, 0, 0)));
 			channels[2] = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[0]->cpu_data() + bottom[0]->offset(i, 2, 0, 0)));
 			cv::merge(channels, img);
 
-			cv::Mat label = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[1]->cpu_data() + bottom[1]->offset(i, 0, 0, 0)));
+			cv::Mat label;
+			if (labelsProvided)
+				label = cv::Mat(shape[2], shape[3], CV_32FC1, (void*)(bottom[1]->cpu_data() + bottom[1]->offset(i, 0, 0, 0)));
 			//img.convertTo(img, CV_8UC3);
 			cv::Mat seg;
 			int numSegs = Segmentation(channels, seg, segId);
 			this->num_segments_ += numSegs;
-			ExtractSegBoxes<Dtype>(channels, seg, label, numSegs, segId, i, bbox_extension_, bottom, top);
+			ExtractSegBoxes<Dtype>(channels, seg, label, numSegs, segId, i, bbox_extension_, bottom, top, labelsProvided);
+
+			//If the user wants the segmentation
+			if (genSegs) {
+				seg.convertTo(seg, CV_32FC1);
+				caffe_copy(num, (Dtype *)seg.data, (Dtype *)top_seg_data + top.back()->offset(i, 0, 0, 0));
+			}
 			segId += numSegs;
 		}
 		//cv::Mat tmp = DecodeDatumToCVMat(*(const caffe::Datum*)((bottom[0]->cpu_data())), true);
