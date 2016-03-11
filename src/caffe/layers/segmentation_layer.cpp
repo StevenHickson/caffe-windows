@@ -715,8 +715,8 @@ namespace caffe {
 		boxes.resize(numSegs);
 		std::vector<cv::Rect>::iterator pB = boxes.begin();
 		while (pB != boxes.end()) {
-			pB->x = seg.rows;
-			pB->y = seg.cols;
+			pB->x = seg.cols;
+			pB->y = seg.rows;
 			pB->width = 0;
 			pB->height = 0;
 			++pB;
@@ -805,6 +805,10 @@ namespace caffe {
 		int numSegs = 0;
 		if (method_ == 0) {
 			cv::Mat tmp;
+			if (max_k_ != 0) {
+				int diff = int(max_k_ - min_k_);
+				k_ = rand() % diff + min_k_;
+			}
 			numSegs = FHGraphSegment(in, smoothing_, k_, min_size_, out, tmp, segStartNumber);
 		}
 		else {
@@ -833,10 +837,14 @@ namespace caffe {
 		method_ = seg_param.method();
 		smoothing_ = seg_param.smoothing();
 		k_ = seg_param.k();
+		min_k_ = seg_param.min_k();
+		max_k_ = seg_param.max_k();
 		min_size_ = seg_param.min_size();
 		s_ = seg_param.s();
 		m_ = seg_param.m();
 		iter_ = seg_param.iter();
+
+		srand((unsigned int)time(NULL));
 
 		CHECK_LT(method_, 2) << "Method must be 0 (FH - default) or 1 (SLIC)";
 		CHECK_GT(method_, -1) << "Method must be 0 (FH - default) or 1 (SLIC)";

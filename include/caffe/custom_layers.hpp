@@ -566,7 +566,7 @@ namespace caffe {
 
 	  //Method = 0 = FH
 	  float smoothing_;
-	  float k_;
+	  float k_, min_k_, max_k_;
 	  int min_size_;
 
 	  //Method = 1 = SLIC
